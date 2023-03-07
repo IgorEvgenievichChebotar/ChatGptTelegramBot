@@ -36,6 +36,9 @@ class Program
                     var msg = update.Message;
                     var chatId = msg.Chat.Id;
 
+                    var name = msg.Chat.FirstName + msg.Chat.LastName;
+                    var username = msg.Chat.Username;
+
                     if (msg.Type == MessageType.Document)
                     {
                         var document = msg.Document!;
@@ -58,11 +61,15 @@ class Program
                             return;
                         }
 
+                        Console.WriteLine($"{DateTime.Now}| Отправлен файл пользователем {name} - {username}");
+
                         await AskAsync(bot, chatId, token, text);
                         return;
                     }
 
                     if (msg.Text is null) return;
+
+                    Console.WriteLine($"{DateTime.Now}| Отправлено сообщение {msg.Text} пользователем {name} - {username}");
 
                     var parts = msg.Text.Split(' ', 2);
                     var cmd = parts[0];
@@ -74,10 +81,11 @@ class Program
                             await bot.SendTextMessageAsync(
                                 chatId: chatId,
                                 text: "API chatGPT. " +
-                                      "Суть бота - принимать на вход много текста непосредственно или в файле формата .txt, " +
-                                      "который не помещается на их сайте из-за ограничений, и получать быстрый ответ. " +
-                                      "Ну или просто пользоваться как обычно.",
-                                parseMode: ParseMode.Html,
+                                      "Преимущества по сравнению с сайтом: \n" +
+                                      "1. Не надо регистрироваться, включать впн, регать иностранную симку и тд\n" +
+                                      "2. Ответ приходит практически сразу, а на сайте нужно ждать\n" +
+                                      "3. Возможность заливать длинный текст в файле .txt. " +
+                                      "На сайте из-за длины он бы отказался отвечать.",
                                 cancellationToken: token);
                             await bot.SendTextMessageAsync(
                                 chatId: chatId,
