@@ -7,6 +7,7 @@ using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace ChatGptTelegramBot;
 
@@ -69,7 +70,8 @@ class Program
 
                     if (msg.Text is null) return;
 
-                    Console.WriteLine($"{DateTime.Now}| Отправлено сообщение {msg.Text} пользователем {name} - {username}");
+                    Console.WriteLine(
+                        $"{DateTime.Now}| Отправлено сообщение '{msg.Text}' пользователем {name} - {username}");
 
                     var parts = msg.Text.Split(' ', 2);
                     var cmd = parts[0];
@@ -98,7 +100,7 @@ class Program
                             messages = new List<ChatMessage>();
                             await bot.SendTextMessageAsync(
                                 chatId: chatId,
-                                text: "Контекст переписки удалён.",
+                                text: "Контекст переписки удалён. Можешь задавать новые вопросы.",
                                 cancellationToken: token);
                             return;
                         default:
@@ -136,26 +138,28 @@ class Program
 
     private static async Task AskAsync(ITelegramBotClient bot, long chatId, CancellationToken token, string query)
     {
+        var answer = AnswerAsync(query, token);
         await bot.SendChatActionAsync(
             chatId: chatId,
             chatAction: ChatAction.Typing,
             cancellationToken: token);
-        var answer = AnswerAsync(query);
         await bot.SendTextMessageAsync(
             chatId: chatId,
             text: await answer,
             cancellationToken: token
         );
-    }
 
-    private static async Task<string> AnswerAsync(string question)
-    {
-        messages.Add(ChatMessage.FromUser(question));
-        var response = await _aiService.ChatCompletion.CreateCompletion(new ChatCompletionCreateRequest
+        static async Task<string> AnswerAsync(string question, CancellationToken token)
         {
-            Messages = messages
-        });
-        var answer = response.Choices[0].Message.Content;
-        return answer;
+            messages.Add(ChatMessage.FromUser(question));
+            var response = await _aiService.ChatCompletion.CreateCompletion(new ChatCompletionCreateRequest
+                {
+                    Messages = messages,
+                },
+                cancellationToken: token
+            );
+            var answer = response.Choices[0].Message.Content;
+            return answer;
+        }
     }
 }
