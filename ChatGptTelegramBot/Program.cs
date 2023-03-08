@@ -21,10 +21,12 @@ class Program
         DefaultModelId = Models.ChatGpt3_5Turbo
     });
 
-    private static List<ChatMessage> messages = new();
+    private static readonly Dictionary<long, List<ChatMessage>> _messages = new();
 
     static void Main(string[] args)
     {
+        _aiService.SetHttpClientTimeout(TimeSpan.FromMinutes(5));
+
         using CancellationTokenSource cts = new();
 
         async void UpdateHandler(ITelegramBotClient bot, Update update, CancellationToken token)
@@ -52,8 +54,8 @@ class Program
                             destination: stream,
                             cancellationToken: token);
 
-                        var text = Encoding.Default.GetString(stream.ToArray());
-                        if (text.Length == 0)
+                        var fileText = Encoding.Default.GetString(stream.ToArray());
+                        if (fileText.Length == 0)
                         {
                             await bot.SendTextMessageAsync(
                                 chatId: chatId,
@@ -64,7 +66,7 @@ class Program
 
                         Console.WriteLine($"{DateTime.Now}| Отправлен файл пользователем {name} - {username}");
 
-                        await AskAsync(bot, chatId, token, text);
+                        await AskAsync(bot, chatId, token, fileText);
                         return;
                     }
 
@@ -76,6 +78,7 @@ class Program
                     var parts = msg.Text.Split(' ', 2);
                     var cmd = parts[0];
                     var query = parts.Length > 1 ? parts[1] : string.Empty;
+                    var text = cmd + " " + query;
 
                     switch (cmd)
                     {
@@ -86,8 +89,8 @@ class Program
                                       "Преимущества по сравнению с сайтом: \n" +
                                       "1. Не надо регистрироваться, включать впн, регать иностранную симку и тд\n" +
                                       "2. Ответ приходит практически сразу, а на сайте нужно ждать\n" +
-                                      "3. Возможность заливать длинный текст в файле .txt. " +
-                                      "На сайте из-за длины он бы отказался отвечать.",
+                                      "3. Возможность заливать длинный текст в файле .txt. На сайте он бы отказался отвечать." +
+                                      "4. Во время большой нагрузки сайт ложится и лагает, а мой бот продолжает работать как часы",
                                 cancellationToken: token);
                             await bot.SendTextMessageAsync(
                                 chatId: chatId,
@@ -97,14 +100,13 @@ class Program
                                 cancellationToken: token);
                             return;
                         case "/newchat":
-                            messages = new List<ChatMessage>();
+                            _messages[chatId] = new List<ChatMessage>();
                             await bot.SendTextMessageAsync(
                                 chatId: chatId,
                                 text: "Контекст переписки удалён. Можешь задавать новые вопросы.",
                                 cancellationToken: token);
                             return;
                         default:
-                            var text = cmd + " " + query;
                             if (text.Length <= 0)
                             {
                                 await bot.SendTextMessageAsync(
@@ -118,6 +120,33 @@ class Program
                             await AskAsync(bot, chatId, token, text);
                             return;
                     }
+                case UpdateType.CallbackQuery:
+                    if (update.CallbackQuery?.Message?.Text is null) return;
+
+                    var callbackMsg = update.CallbackQuery.Message;
+                    var callbackCmd = update.CallbackQuery.Data!.Split(" ")[0];
+                    var callbackChatId = callbackMsg.Chat.Id;
+
+                    switch (callbackCmd)
+                    {
+                        case "/regen":
+                            if (!_messages.ContainsKey(callbackChatId))
+                            {
+                                _messages[callbackChatId] = new List<ChatMessage>();
+                            }
+
+                            var chatMessage = _messages[callbackChatId].Last().Content;
+                            _messages[callbackChatId].RemoveAt(_messages[callbackChatId].Count - 1);
+                            await AskAsync(bot, callbackChatId, token, chatMessage);
+
+                            await bot.AnswerCallbackQueryAsync(
+                                callbackQueryId: update.CallbackQuery.Id,
+                                cancellationToken: token);
+
+                            return;
+                    }
+
+                    break;
             }
         }
 
@@ -138,23 +167,34 @@ class Program
 
     private static async Task AskAsync(ITelegramBotClient bot, long chatId, CancellationToken token, string query)
     {
-        var answer = AnswerAsync(query, token);
+        var answer = AnswerAsync(query, token, chatId);
         await bot.SendChatActionAsync(
             chatId: chatId,
             chatAction: ChatAction.Typing,
             cancellationToken: token);
-        await bot.SendTextMessageAsync(
+        var msg = await bot.SendTextMessageAsync(
             chatId: chatId,
             text: await answer,
             cancellationToken: token
         );
+        await bot.EditMessageReplyMarkupAsync(
+            chatId: chatId,
+            messageId: msg.MessageId,
+            replyMarkup: new InlineKeyboardMarkup(
+                InlineKeyboardButton.WithCallbackData("🔄", $"/regen {msg.MessageId}")),
+            cancellationToken: token);
 
-        static async Task<string> AnswerAsync(string question, CancellationToken token)
+        static async Task<string> AnswerAsync(string question, CancellationToken token, long chatId)
         {
-            messages.Add(ChatMessage.FromUser(question));
+            if (!_messages.ContainsKey(chatId))
+            {
+                _messages.Add(chatId, new List<ChatMessage>());
+            }
+
+            _messages[chatId].Add(ChatMessage.FromUser(question));
             var response = await _aiService.ChatCompletion.CreateCompletion(new ChatCompletionCreateRequest
                 {
-                    Messages = messages,
+                    Messages = _messages[chatId],
                 },
                 cancellationToken: token
             );
