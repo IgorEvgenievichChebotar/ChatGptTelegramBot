@@ -21,7 +21,7 @@ class Program
         DefaultModelId = Models.ChatGpt3_5Turbo
     });
 
-    private static readonly IAsyncMessagesRepo _messagesRepo = new MessagesRepo();
+    private static readonly IMessagesRepo _messagesRepo = new MessagesRepo();
 
     static void Main(string[] args)
     {

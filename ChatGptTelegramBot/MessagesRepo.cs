@@ -4,7 +4,7 @@ using OpenAI.GPT3.ObjectModels.RequestModels;
 
 namespace ChatGptTelegramBot;
 
-public interface IAsyncMessagesRepo
+public interface IMessagesRepo
 {
     Task<List<ChatMessage>> GetHistory(long chatId);
     Task Save(ChatMessage message, long chatId);
@@ -12,7 +12,7 @@ public interface IAsyncMessagesRepo
     Task RemoveAll(long chatId);
 }
 
-public class MessagesRepo : IAsyncMessagesRepo
+public class MessagesRepo : IMessagesRepo
 {
     private static readonly SQLiteConnection _connection = new("Data Source=messages;Version=3;");
 
