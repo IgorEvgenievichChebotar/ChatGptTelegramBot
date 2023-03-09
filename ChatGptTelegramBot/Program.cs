@@ -21,7 +21,7 @@ class Program
         DefaultModelId = Models.ChatGpt3_5Turbo
     });
 
-    private static readonly Dictionary<long, List<ChatMessage>> _messages = new();
+    private static readonly IMessagesRepo _messagesRepo = new MessagesRepo();
 
     static void Main(string[] args)
     {
@@ -100,11 +100,7 @@ class Program
                                 cancellationToken: token);
                             return;
                         case "/newchat":
-                            if (_messages.ContainsKey(chatId))
-                            {
-                                _messages[chatId] = new List<ChatMessage>();
-                            }
-
+                            _messagesRepo.RemoveAll(chatId);
                             await bot.SendTextMessageAsync(
                                 chatId: chatId,
                                 text: "Контекст переписки удалён. Можешь задавать новые вопросы.",
@@ -134,14 +130,9 @@ class Program
                     switch (callbackCmd)
                     {
                         case "/regen":
-                            if (!_messages.ContainsKey(callbackChatId))
-                            {
-                                _messages[callbackChatId] = new List<ChatMessage>();
-                            }
+                            var chatMessage = _messagesRepo.RemoveLast(callbackChatId);
 
-                            var chatMessage = _messages[callbackChatId].Last().Content;
-                            _messages[callbackChatId].RemoveAt(_messages[callbackChatId].Count - 1);
-                            await AskAsync(bot, callbackChatId, token, chatMessage);
+                            await AskAsync(bot, callbackChatId, token, chatMessage.Content);
 
                             await bot.AnswerCallbackQueryAsync(
                                 callbackQueryId: update.CallbackQuery.Id,
@@ -190,15 +181,10 @@ class Program
 
         static async Task<string> AnswerAsync(string question, CancellationToken token, long chatId)
         {
-            if (!_messages.ContainsKey(chatId))
-            {
-                _messages.Add(chatId, new List<ChatMessage>());
-            }
-
-            _messages[chatId].Add(ChatMessage.FromUser(question));
+            _messagesRepo.Save(ChatMessage.FromUser(question), chatId);
             var response = await _aiService.ChatCompletion.CreateCompletion(new ChatCompletionCreateRequest
                 {
-                    Messages = _messages[chatId],
+                    Messages = _messagesRepo.GetHistory(chatId)
                 },
                 cancellationToken: token
             );
