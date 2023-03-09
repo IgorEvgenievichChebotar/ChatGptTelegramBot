@@ -89,7 +89,7 @@ class Program
                                       "Преимущества по сравнению с сайтом: \n" +
                                       "1. Не надо регистрироваться, включать впн, регать иностранную симку и тд\n" +
                                       "2. Ответ приходит практически сразу, а на сайте нужно ждать\n" +
-                                      "3. Возможность заливать длинный текст в файле .txt. На сайте он бы отказался отвечать." +
+                                      "3. Возможность заливать длинный текст в файле .txt. На сайте он бы отказался отвечать.\n" +
                                       "4. Во время большой нагрузки сайт ложится и лагает, а мой бот продолжает работать как часы",
                                 cancellationToken: token);
                             await bot.SendTextMessageAsync(
@@ -100,7 +100,11 @@ class Program
                                 cancellationToken: token);
                             return;
                         case "/newchat":
-                            _messages[chatId] = new List<ChatMessage>();
+                            if (_messages.ContainsKey(chatId))
+                            {
+                                _messages[chatId] = new List<ChatMessage>();
+                            }
+
                             await bot.SendTextMessageAsync(
                                 chatId: chatId,
                                 text: "Контекст переписки удалён. Можешь задавать новые вопросы.",
