@@ -21,7 +21,7 @@ class Program
         DefaultModelId = Models.ChatGpt3_5Turbo
     });
 
-    private static readonly IMessagesRepo _messagesRepo = new MessagesRepo();
+    private static readonly IAsyncMessagesRepo _messagesRepo = new MessagesRepo();
 
     static void Main(string[] args)
     {
@@ -100,7 +100,7 @@ class Program
                                 cancellationToken: token);
                             return;
                         case "/newchat":
-                            _messagesRepo.RemoveAll(chatId);
+                            await _messagesRepo.RemoveAll(chatId);
                             await bot.SendTextMessageAsync(
                                 chatId: chatId,
                                 text: "Контекст переписки удалён. Можешь задавать новые вопросы.",
@@ -130,7 +130,7 @@ class Program
                     switch (callbackCmd)
                     {
                         case "/regen":
-                            var chatMessage = _messagesRepo.RemoveLast(callbackChatId);
+                            var chatMessage = await _messagesRepo.RemoveLast(callbackChatId);
 
                             await AskAsync(bot, callbackChatId, token, chatMessage.Content);
 
@@ -181,10 +181,10 @@ class Program
 
         static async Task<string> AnswerAsync(string question, CancellationToken token, long chatId)
         {
-            _messagesRepo.Save(ChatMessage.FromUser(question), chatId);
+            await _messagesRepo.Save(ChatMessage.FromUser(question), chatId);
             var response = await _aiService.ChatCompletion.CreateCompletion(new ChatCompletionCreateRequest
                 {
-                    Messages = _messagesRepo.GetHistory(chatId)
+                    Messages = await _messagesRepo.GetHistory(chatId)
                 },
                 cancellationToken: token
             );
